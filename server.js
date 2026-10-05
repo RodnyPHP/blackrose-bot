@@ -66,11 +66,20 @@ app.get('/miniapp', (req, res) => {
 
 // Start Server
 bot.launch().then(() => {
+  console.log('Bot launched successfully!');
+  
+  // Add a simple health check route for Render
+  app.get('/', (req, res) => {
+    res.send('BLACK ROSE BOT IS RUNNING! 🖤');
+  });
+
+  // Listen on the port Render provides
   app.listen(PORT, () => {
-    console.log(`Bot running on port ${PORT}`);
+    console.log(`Web server listening on port ${PORT}`);
   });
 }).catch(err => {
   console.error('Bot launch error:', err);
+  process.exit(1);
 });
 
 // Graceful stop
