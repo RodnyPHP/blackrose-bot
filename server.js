@@ -1,4 +1,4 @@
-// server.js - BLACK ROSE ALERT BOT (Webhook Version for Render)
+// server.js - BLACK ROSE ALERT BOT (Final Fixed Version)
 const express = require('express');
 const { Telegraf } = require('telegraf');
 const app = express();
@@ -17,7 +17,6 @@ app.get('/', (req, res) => {
 });
 
 // 2. Webhook Endpoint (Telegram sends updates here)
-// Telegram will POST to: https://your-render-url.onrender.com/telegram
 app.post('/telegram', (req, res) => {
   bot.handleUpdate(req.body, res);
 });
@@ -104,14 +103,18 @@ app.listen(PORT, () => {
   console.log(`✅ Web server listening on port ${PORT}`);
 });
 
-// 8. Set Webhook (Runs once on startup)
+// 8. Set Webhook (Fixed URL Logic)
 const WEBHOOK_PATH = '/telegram';
-// Use Render's external URL if available, otherwise fallback
-const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL 
-  ? `https://${process.env.RENDER_EXTERNAL_URL}` 
-  : `https://blackrose-bot-190j.onrender.com`; // Fallback if env var missing
-  
-const FULL_WEBHOOK_URL = `${PUBLIC_URL}${WEBHOOK_PATH}`;
+
+// Safely construct the domain
+let domain = process.env.RENDER_EXTERNAL_URL || 'blackrose-bot-190j.onrender.com';
+
+// Ensure it starts with https://
+if (!domain.startsWith('http')) {
+  domain = `https://${domain}`;
+}
+
+const FULL_WEBHOOK_URL = `${domain}${WEBHOOK_PATH}`;
 
 console.log(`Setting webhook to: ${FULL_WEBHOOK_URL}`);
 
@@ -122,7 +125,6 @@ bot.telegram.setWebhook(FULL_WEBHOOK_URL)
   })
   .catch(err => {
     console.error('❌ Failed to set webhook:', err);
-    // Don't exit, let the web server keep running
   });
 
 // Graceful shutdown
