@@ -34,7 +34,9 @@ app.post('/webhook', async (req, res) => {
 // 2. Handle Telegram Commands (/stats, /start)
 bot.command('stats', async (ctx) => {
   try {
-    const res = await fetch(`${SITE_URL}/api/stats.php`);
+    const res = await fetch(`${SITE_URL}/api/stats.php`, { 
+  timeout: 10000 // Wait up to 10 seconds (was default 5s)
+});
     const data = await res.json();
     const txt = `📊 **Stats**\nViews: ${data.views}\nUsers: ${data.users}`;
     await ctx.reply(txt);
