@@ -1,4 +1,4 @@
-// server.js - FINAL VERSION FOR RENDER
+// server.js - BLACK ROSE ALERT BOT (Webhook Version for Render)
 const express = require('express');
 const { Telegraf } = require('telegraf');
 const app = express();
@@ -11,50 +11,120 @@ app.use(express.json());
 const SITE_URL = "https://rodny.free.nf";
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 
-// 1. Health Check Route (Required for Render)
+// 1. Health Check Route (Required for Render to stay alive)
 app.get('/', (req, res) => {
   res.send('BLACK ROSE BOT IS RUNNING! 🖤');
 });
 
-// 2. Webhook from Site
-app.post('/webhook', async (req, res) => {
-  const payload = req.body;
-  let msg = `🖤 **BLACK ROSE ALERT**\n\n`;
-  if (payload.event === 'post_published') {
-    msg += `📢 **New Post!**\nTitle: ${payload.title}\nID: ${payload.id}`;
-  } else {
-    msg += `🔔 Update: ${JSON.stringify(payload)}`;
-  }
+// 2. Webhook Endpoint (Telegram sends updates here)
+// Telegram will POST to: https://your-render-url.onrender.com/telegram
+app.post('/telegram', (req, res) => {
+  bot.handleUpdate(req.body, res);
+});
+
+// 3. Handle /stats Command
+bot.command('stats', async (ctx) => {
   try {
-    await bot.telegram.sendMessage(process.env.ADMIN_ID, msg, { parse_mode: 'Markdown' });
-    res.send('OK');
+    // Fetch from your site with a longer timeout for free hosts
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+    
+    const res = await fetch(`${SITE_URL}/api/stats.php`, { signal: controller.signal });
+    clearTimeout(timeout);
+    
+    if (!res.ok) throw new Error('HTTP error');
+    
+    const data = await res.json();
+    const txt = `📊 **Live Stats**\n\nViews: ${data.views}\nUsers: ${data.users}\nPosts: ${data.posts}`;
+    await ctx.reply(txt);
   } catch (e) {
-    console.error(e);
-    res.status(500).send('Error');
+    console.error("Stats error:", e);
+    await ctx.reply("❌ Site offline or timeout.");
   }
 });
 
-// 3. Mini-App Route
+// 4. Handle /start Command
+bot.command('start', async (ctx) => {
+  await ctx.reply("🖤 Welcome to BLACK ROSE Alert!\nUse /stats for analytics.\nVisit: https://rodny.free.nf");
+});
+
+// 5. Handle Approval Buttons
+bot.on('callback_query', async (ctx) => {
+  const data = ctx.callbackQuery.data;
+  if (data.startsWith('approve:')) {
+    const id = data.split(':')[1];
+    try {
+      await fetch(`${SITE_URL}/api/approve.php?id=${id}`);
+      await ctx.answerCbQuery();
+      await ctx.editMessageText(`✅ Post ${id} Approved!`);
+    } catch (e) {
+      await ctx.answerCbQuery();
+      await ctx.editMessageText(`❌ Failed to approve ${id}.`);
+    }
+  }
+});
+
+// 6. Mini-App Dashboard
 app.get('/miniapp', (req, res) => {
-  const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="background:#0f0f12;color:white;text-align:center;padding:20px;font-family:sans-serif"><h1 style="color:#6d4aff">🖤 Black Rose</h1><div id="s">Loading...</div><script src="https://telegram.org/js/telegram-web-app.js"></script><script>Telegram.WebApp.expand();fetch('/api/stats.php').then(r=>r.json()).then(d=>{document.getElementById('s').innerHTML='Views: '+d.views+'<br>Users: '+d.users}).catch(()=>document.getElementById('s').innerText='Offline')</script></body></html>`;
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Black Rose</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { background: #0f0f12; color: white; font-family: sans-serif; text-align: center; padding: 20px; }
+    h1 { color: #6d4aff; }
+    .card { background: #1e1e24; padding: 15px; border-radius: 10px; margin: 10px 0; }
+    .val { font-size: 24px; font-weight: bold; color: #6d4aff; }
+  </style>
+</head>
+<body>
+  <h1>🖤 Black Rose CMS</h1>
+  <div class="card"><h3>Views</h3><div id="v" class="val">Loading...</div></div>
+  <div class="card"><h3>Users</h3><div id="u" class="val">Loading...</div></div>
+  <button onclick="window.Telegram.WebApp.close()" style="background:#6d4aff;color:white;border:none;padding:10px 20px;border-radius:5px;">Close</button>
+  <script>
+    window.Telegram.WebApp.expand();
+    fetch('/api/stats.php').then(r=>r.json()).then(d=>{
+      document.getElementById('v').innerText = d.views;
+      document.getElementById('u').innerText = d.users;
+    }).catch(()=>{
+      document.getElementById('v').innerText = 'Offline';
+      document.getElementById('u').innerText = 'Offline';
+    });
+  </script>
+</body>
+</html>`;
   res.send(html);
 });
 
-// 4. Start Web Server FIRST (Critical for Render)
+// 7. Start Web Server
 app.listen(PORT, () => {
   console.log(`✅ Web server listening on port ${PORT}`);
 });
 
-// 5. Then Launch Bot
-bot.launch()
+// 8. Set Webhook (Runs once on startup)
+const WEBHOOK_PATH = '/telegram';
+// Use Render's external URL if available, otherwise fallback
+const PUBLIC_URL = process.env.RENDER_EXTERNAL_URL 
+  ? `https://${process.env.RENDER_EXTERNAL_URL}` 
+  : `https://blackrose-bot-190j.onrender.com`; // Fallback if env var missing
+  
+const FULL_WEBHOOK_URL = `${PUBLIC_URL}${WEBHOOK_PATH}`;
+
+console.log(`Setting webhook to: ${FULL_WEBHOOK_URL}`);
+
+bot.telegram.setWebhook(FULL_WEBHOOK_URL)
   .then(() => {
-    console.log('✅ Bot launched successfully!');
+    console.log(`✅ Webhook successfully set to: ${FULL_WEBHOOK_URL}`);
+    console.log('✅ Bot is ready! Send /start in Telegram.');
   })
   .catch(err => {
-    console.error('❌ Bot launch error:', err);
-    process.exit(1);
+    console.error('❌ Failed to set webhook:', err);
+    // Don't exit, let the web server keep running
   });
 
-// Graceful stop
+// Graceful shutdown
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
