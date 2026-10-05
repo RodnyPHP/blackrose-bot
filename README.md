@@ -1,7 +1,3 @@
-Here is a professional, comprehensive, and attractive `README.md` file for your **BLACK ROSE Alert** bot. You can copy this directly into your GitHub repository to replace the default one.
-
----
-
 # 🖤 BLACK ROSE Alert Bot
 
 > **The ultimate Telegram companion for your CMS.**  
