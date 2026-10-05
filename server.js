@@ -34,14 +34,29 @@ app.post('/webhook', async (req, res) => {
 // 2. Handle Telegram Commands (/stats, /start)
 bot.command('stats', async (ctx) => {
   try {
-    const res = await fetch(`${SITE_URL}/api/stats.php`, { 
-  timeout: 10000 // Wait up to 10 seconds (was default 5s)
-});
-    const data = await res.json();
-    const txt = `📊 **Stats**\nViews: ${data.views}\nUsers: ${data.users}`;
+    // Try fetching 3 times with delays
+    let data;
+    for (let i = 0; i < 3; i++) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 15000); // 15s timeout
+        const res = await fetch(`${SITE_URL}/api/stats.php`, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (res.ok) {
+          data = await res.json();
+          break;
+        }
+      } catch (e) {
+        if (i === 2) throw e; // Last attempt failed
+        await new Promise(r => setTimeout(r, 2000)); // Wait 2s before retry
+      }
+    }
+    
+    const txt = `📊 **Stats**\nViews: ${data.views}\nUsers: ${data.users}\nPosts: ${data.posts}`;
     await ctx.reply(txt);
   } catch (e) {
-    await ctx.reply("❌ Site offline");
+    console.error("Stats fetch error:", e);
+    await ctx.reply("❌ Site offline (Timeout or Error)");
   }
 });
 
